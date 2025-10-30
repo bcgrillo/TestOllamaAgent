@@ -10,7 +10,8 @@ public static class AgentManager
         return new Dictionary<int, BaseAgent>
         {
             { 1, new WeatherAgent() },
-            { 2, new ChatAgent() }
+            { 2, new ChatAgent() },
+            { 3, new SearchAgent() }
         };
     }
 
