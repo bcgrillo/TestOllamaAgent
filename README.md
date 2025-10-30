@@ -92,7 +92,7 @@ dotnet run
 ### Example Interaction
 
 ```
-🌤️  INTERACTIVE WEATHER AGENT CHAT
+🌤️ INTERACTIVE WEATHER AGENT CHAT
 ============================================================
 
 👤 You: How's the weather in Donosti?
@@ -102,7 +102,7 @@ dotnet run
 🔧 Function Name: GetWeather - Parameters: location -> Donosti
 Response from function: Rainy with a high of 10°C.
 
-🌤️  WeatherMan: According to the information I have, the weather in Donosti 
+🌤️ WeatherMan: According to the information I have, the weather in Donosti 
 (San Sebastián) is rainy with a high temperature of 10°C. I recommend 
 bringing an umbrella and dressing warmly!
 
