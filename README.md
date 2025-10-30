@@ -1,10 +1,12 @@
-# 🌤️ Test Ollama Agent
+# 🤖 Test Ollama Agent
 
-A demonstration project showing how to create an intelligent AI agent system that can use both **Ollama** (local) and **Azure AI** (cloud) services. This example showcases a modular AI agent architecture with clean separation of concerns.
+A comprehensive demonstration project showing how to create an intelligent multi-agent AI system that can use both **Ollama** (local) and **Azure AI** (cloud) services. This example showcases a modular AI agent architecture with specialized agents, interactive selection, and web search capabilities.
 
 ## 🎯 What You'll Learn
 
-- **Modular AI Agent Architecture**: Structure agents with clean separation of concerns
+- **Multi-Agent Architecture**: Multiple specialized agents with unique capabilities
+- **Interactive Agent Selection**: Runtime selection of AI providers and agents
+- **Web Search Integration**: DuckDuckGo search functionality for real-time information
 - **Provider Abstraction**: Use a common interface for multiple AI services
 - **Function Calling**: Implement reusable tools that agents can use
 - **Middleware Pattern**: Add cross-cutting functionality like logging
@@ -15,18 +17,20 @@ A demonstration project showing how to create an intelligent AI agent system tha
 
 ```
 TestOllamaAgent/
-├── agents/                     # Agent definitions
+├── agents/                     # Agent definitions and management
 │   ├── BaseAgent.cs           # Abstract base class for all agents
-│   ├── AgentManager.cs        # Agent registry and management
+│   ├── AgentManager.cs        # Agent registry and interactive selection
 │   ├── WeatherAgent.cs        # Weather-specific agent
-│   └── ChatAgent.cs           # General conversation agent
+│   ├── ChatAgent.cs           # General conversation agent
+│   └── SearchAgent.cs         # Web search specialized agent
 ├── tools/                      # Reusable function tools
 │   ├── WeatherTools.cs        # Weather-related functions
-│   └── TimeTools.cs           # Time-related functions
+│   ├── TimeTools.cs           # Time-related functions
+│   └── SearchTools.cs         # Web search with DuckDuckGo
 ├── middlewares/                # Cross-cutting concerns
 │   └── FunctionCallMiddleware.cs # Logging middleware
 ├── Configuration.cs           # Typed configuration classes
-├── Program.cs                 # Main entry point and logic
+├── Program.cs                 # Main entry point and interactive logic
 ├── appsettings.example.json   # Configuration template
 ├── appsettings.json          # Current config (don't commit)
 └── TestOllamaAgent.csproj     # Project dependencies
@@ -34,10 +38,16 @@ TestOllamaAgent/
 
 ## ✨ Key Features
 
-### 🤖 Modular Agent Design
-- **BaseAgent**: Abstract class that defines the common structure for all agents
-- **Self-contained Configuration**: Each agent defines its own prompt, tools, and behavior
-- **Easy Extension**: Add new agents by inheriting from `BaseAgent`
+### 🤖 Multi-Agent System
+- **Specialized Agents**: Weather, Chat, and Web Search agents with unique capabilities
+- **Interactive Selection**: Runtime selection of both AI provider and agent type
+- **BaseAgent Architecture**: Abstract class that defines common structure for all agents
+- **AgentManager**: Centralized registry and menu system for agent selection
+
+### 🔍 Web Search Integration
+- **DuckDuckGo Search**: Real-time web search capabilities via SearchAgent
+- **SearchTools**: Comprehensive web search with result parsing and formatting
+- **Information Retrieval**: Find current information, news, and specific data
 
 ### 🔧 Reusable Tools
 - **Organized by Function**: Tools are grouped in logical namespaces
@@ -49,9 +59,31 @@ TestOllamaAgent/
 - **Extensible**: Easy to add new middleware for authentication, validation, etc.
 - **Composable**: Stack multiple middleware layers
 
+## 🤖 Available Agents
+
+### 🌤️ Weather Agent
+- **Purpose**: Provides weather information and forecasts
+- **Tools**: Weather data simulation (can be extended with real APIs)
+- **Use Cases**: Current weather, forecasts, weather-related questions
+
+### 💬 Chat Agent  
+- **Purpose**: General conversation and assistance
+- **Tools**: Time information and basic utilities
+- **Use Cases**: General questions, casual conversation, help with various topics
+
+### 🔍 Search Agent
+- **Purpose**: Web search and real-time information retrieval
+- **Tools**: DuckDuckGo web search integration
+- **Use Cases**: Current events, research, fact-checking, finding recent information
+- **Features**: 
+  - Real-time web search
+  - Result formatting and summarization
+  - Source attribution
+  - Search query optimization
+
 ## ⚙️ Setup
 
-### 1. Configure the AI Provider
+### Configure the AI Provider
 
 Copy the example configuration:
 ```powershell
@@ -64,10 +96,9 @@ Edit `appsettings.json` for your preferred AI provider:
 ```json
 {
   "ClientConfiguration": {
-    "UseAzureAI": false,
     "Ollama": {
       "Endpoint": "http://localhost:11434",
-      "ModelName": "llama3.1:8b"
+      "ModelName": "llama3.2:3b"
     }
   }
 }
@@ -79,30 +110,18 @@ Prerequisites for Ollama:
 winget install --id=Ollama.Ollama -e
 
 # Pull the model
-ollama pull llama3.1:8b
+ollama pull llama3.2:3b
 ```
 
 **Option B: Azure AI** ☁️
 ```json
 {
   "ClientConfiguration": {
-    "UseAzureAI": true,
     "AzureAI": {
       "BaseUrl": "https://models.github.ai/inference",
       "ApiKey": "your-actual-api-key",
       "ModelName": "mistral-small-2503"
     }
-  }
-}
-```
-
-### 2. Customize the Agent
-
-```json
-{
-  "Agent": {
-    "Name": "WeatherMan",
-    "Instructions": "You are a professional weather forecaster. Only provide weather information or forecasts if the user requests it."
   }
 }
 ```
@@ -117,22 +136,53 @@ dotnet restore
 dotnet run
 ```
 
+The application will present you with two interactive menus:
+
+1. **Provider Selection**: Choose between Ollama (local) or Azure AI (cloud)
+2. **Agent Selection**: Choose from available specialized agents:
+   - 🌤️ **Weather Agent**: Weather forecasts and information
+   - 💬 **Chat Agent**: General conversation and assistance  
+   - 🔍 **Search Agent**: Web search and information retrieval
+
 ### Example Interaction
 
 ```
-🌤️ INTERACTIVE WEATHER AGENT CHAT
+🔧 SELECCIÓN DE PROVEEDOR DE IA
+========================================
+1. 🦙 Ollama (Modelos locales)
+2. ☁️  Azure AI (Modelos en la nube)
+0. 🚪 Salir
+
+👉 Selecciona una opción: 1
+
+🤖 SELECCIÓN DE AGENTE
+========================================
+1. 🌤️ Agente del Clima - Proporciona información meteorológica
+2. 💬 Agente de Chat - Conversación general y asistencia
+3. 🔍 Agente de Búsqueda Web - Busca información en internet usando DuckDuckGo
+0. Salir
+
+Selecciona un agente (número): 3
+
+🔍 CHAT INTERACTIVO CON AGENTE DE BÚSQUEDA WEB
 ============================================================
 
-👤 You: How's the weather in Donosti?
+👤 You: What's happening with AI developments today?
 
-🧠 WeatherMan is thinking...
+🧠 🔍 Agente de Búsqueda Web is thinking...
 
-🔧 Function Name: GetWeather - Parameters: location -> Donosti
-Response from function: Rainy with a high of 10°C.
+🔧 Function Name: SearchWeb - Parameters: query -> AI developments today news
 
-🌤️ WeatherMan: According to the information I have, the weather in Donosti 
-(San Sebastián) is rainy with a high temperature of 10°C. I recommend 
-bringing an umbrella and dressing warmly!
+📊 Resultados de búsqueda para: AI developments today news
+🔍 Se encontraron 8 resultados relevantes:
+
+1. 📰 **Latest AI Breakthroughs Shape Industry** - TechNews
+   Recent developments in artificial intelligence are revolutionizing...
+
+2. 📰 **OpenAI Announces New Model Updates** - AI Times  
+   Major updates to language models with improved capabilities...
+
+🔍 Agente de Búsqueda Web: Basándome en los resultados de búsqueda más recientes, aquí tienes un resumen de los desarrollos de IA más importantes de hoy...
 
 ✨ Response complete!
 ```
@@ -148,6 +198,43 @@ public class AppConfiguration
 {
     public ClientConfiguration ClientConfiguration { get; set; } = new();
     public AgentConfiguration Agent { get; set; } = new();
+}
+
+public class ClientConfiguration
+{
+    public bool UseAzureAI { get; set; }
+    public OllamaConfiguration Ollama { get; set; } = new();
+    public AzureAIConfiguration AzureAI { get; set; } = new();
+}
+```
+
+### Multi-Agent Architecture
+
+The application supports multiple specialized agents managed through the AgentManager:
+
+```csharp
+public static Dictionary<int, BaseAgent> GetAvailableAgents()
+{
+    return new Dictionary<int, BaseAgent>
+    {
+        { 1, new WeatherAgent() },
+        { 2, new ChatAgent() },
+        { 3, new SearchAgent() }
+    };
+}
+```
+
+### Web Search Integration
+
+The SearchAgent uses DuckDuckGo for real-time web searches:
+
+```csharp
+[Description("Search the web for information using DuckDuckGo. Returns up to 10 relevant results.")]
+public static async Task<string> SearchWeb(
+    [Description("The search query - what you want to search for on the web")] string query)
+{
+    // Implementation handles HTTP requests to DuckDuckGo HTML search
+    // and parses results into formatted output
 }
 ```
 
@@ -234,7 +321,7 @@ namespace TestOllamaAgent.Agents;
 
 public class MathAgent : BaseAgent
 {
-    public override string Name => "MathBot";
+    public override string Name => "🧮 Agente Matemático";
     
     public override string Description => "🧮 Agente matemático - Resuelve operaciones matemáticas";
     
@@ -255,7 +342,8 @@ public static Dictionary<int, BaseAgent> GetAvailableAgents()
     {
         { 1, new WeatherAgent() },
         { 2, new ChatAgent() },
-        { 3, new MathAgent() }  // Add your new agent
+        { 3, new SearchAgent() },
+        { 4, new MathAgent() }  // Add your new agent
     };
 }
 ```
@@ -266,11 +354,31 @@ Create tool classes in the `tools/` folder. Each tool should be a static method 
 
 ```csharp
 // tools/DatabaseTools.cs
-[Description("Search for user information in the database.")]
-public static string SearchUser([Description("The user ID to search for.")] string userId)
+using System.ComponentModel;
+
+namespace TestOllamaAgent.Tools;
+
+public static class DatabaseTools
 {
-    // Your implementation here
-    return $"User {userId} found";
+    [Description("Search for user information in the database.")]
+    public static string SearchUser([Description("The user ID to search for.")] string userId)
+    {
+        // Your implementation here
+        return $"User {userId} found";
+    }
+}
+```
+
+For async operations (like web search), use async methods:
+
+```csharp
+// tools/ApiTools.cs
+[Description("Fetch data from an external API.")]
+public static async Task<string> FetchApiData([Description("The API endpoint URL")] string url)
+{
+    using var client = new HttpClient();
+    var response = await client.GetStringAsync(url);
+    return response;
 }
 ```
 
@@ -305,33 +413,10 @@ public override Func<AIAgent, FunctionInvocationContext, Func<FunctionInvocation
 }
 ```
 
-## 🛠️ Legacy Extension Examples
-
-### Adding New Functions (Old Way)
-
-```csharp
-[Description("Get the current time in a specific timezone.")]
-static string GetCurrentTime([Description("The timezone to get time for.")] string timezone)
-{
-    return DateTime.Now.ToString("HH:mm:ss");
-}
-
-// Register in the agent
-AIAgent agent = new ChatClientAgent(
-    chatClient,
-    instructions,
-    name,
-    tools: [
-        AIFunctionFactory.Create(GetWeather),
-        AIFunctionFactory.Create(GetCurrentTime)  // New function
-    ]
-);
-```
-
 ### Adding New AI Providers
 
 1. Add configuration class in `Configuration.cs`
-2. Implement provider initialization in `Program.cs`
+2. Implement provider initialization in `Program.cs`  
 3. Update the configuration validation logic
 
 ## 🔒 Security Best Practices
@@ -351,18 +436,21 @@ For production, use environment variables or Azure Key Vault.
 ## 📚 Technologies Used
 
 - **.NET 9.0**: Modern C# features and performance
-- **Microsoft.Extensions.AI**: AI provider abstraction
-- **Microsoft.AI.Agents**: Agent framework
-- **Ollama**: Local AI models
-- **Azure AI**: Cloud AI services
+- **Microsoft.Agents.AI**: Agent framework for building AI agents
+- **Microsoft.Extensions.AI**: AI provider abstraction layer
+- **Microsoft.Extensions.AI.AzureAIInference**: Azure AI integration
+- **OllamaSharp**: Local AI models with Ollama
+- **DuckDuckGo**: Web search integration for real-time information
 
 ## 🎯 Next Steps
 
 1. **Experiment** with different models and configurations
-2. **Add** new functions (real weather API, calculator, etc.)
-3. **Implement** conversation persistence
-4. **Explore** other AI providers (OpenAI, Anthropic)
-5. **Build** a web interface
+2. **Add** new specialized agents (Email, Calendar, Code Analysis, etc.)
+3. **Enhance** search capabilities with additional providers
+4. **Implement** conversation persistence and history
+5. **Explore** other AI providers (OpenAI, Anthropic, Google)
+6. **Build** a web interface or API
+7. **Add** authentication and user management
 
 ## 📖 Resources
 

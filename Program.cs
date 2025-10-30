@@ -18,32 +18,93 @@ var configuration = new ConfigurationBuilder()
 var appConfig = new AppConfiguration();
 configuration.Bind(appConfig);
 
-// Validate Azure AI configuration if available
-if (!string.IsNullOrEmpty(appConfig.ClientConfiguration.AzureAI.ApiKey) && 
-    appConfig.ClientConfiguration.AzureAI.ApiKey == "YOUR_AZURE_AI_KEY_HERE")
-{
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine("⚠️  ADVERTENCIA: Azure AI API key no está configurada correctamente.");
-    Console.WriteLine("Azure AI no estará disponible hasta que configures la clave en appsettings.json");
-    Console.ResetColor();
-}
-
 // ============================================================================
 // Helper Methods for Provider and Model Selection
 // ============================================================================
 
 /// <summary>
+/// Checks if Ollama is available and properly configured.
+/// </summary>
+static async Task<bool> IsOllamaAvailableAsync(string? endpoint)
+{
+    try
+    {
+        if (string.IsNullOrEmpty(endpoint))
+            return false;
+            
+        var ollamaClient = new OllamaApiClient(new Uri(endpoint));
+        var models = await ollamaClient.ListLocalModelsAsync();
+        return models.Any();
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+/// <summary>
+/// Checks if Azure AI is available and properly configured.
+/// </summary>
+static bool IsAzureAIAvailable(AzureAIConfiguration? azureConfig)
+{
+    if (azureConfig == null)
+        return false;
+        
+    return !string.IsNullOrEmpty(azureConfig.ApiKey) && 
+           azureConfig.ApiKey != "YOUR_AZURE_AI_KEY_HERE" &&
+           !string.IsNullOrEmpty(azureConfig.BaseUrl) &&
+           azureConfig.AvailableModels.Any();
+}
+
+/// <summary>
+/// Gets available providers based on configuration and connectivity.
+/// </summary>
+static async Task<Dictionary<int, (string Name, bool IsAzure)>> GetAvailableProvidersAsync(AppConfiguration config)
+{
+    var availableProviders = new Dictionary<int, (string Name, bool IsAzure)>();
+    int optionNumber = 1;
+
+    // Check Ollama availability
+    bool ollamaAvailable = await IsOllamaAvailableAsync(config.ClientConfiguration.Ollama.Endpoint);
+    if (ollamaAvailable)
+    {
+        availableProviders.Add(optionNumber++, ("🦙 Ollama (Modelos locales)", false));
+    }
+
+    // Check Azure AI availability
+    bool azureAvailable = IsAzureAIAvailable(config.ClientConfiguration.AzureAI);
+    if (azureAvailable)
+    {
+        availableProviders.Add(optionNumber++, ("☁️  Azure AI (Modelos en la nube)", true));
+    }
+
+    return availableProviders;
+}
+
+/// <summary>
 /// Displays the provider selection menu and returns the user's choice.
 /// </summary>
-static int DisplayProviderMenu()
+static int DisplayProviderMenu(Dictionary<int, (string Name, bool IsAzure)> availableProviders)
 {
     Console.ForegroundColor = ConsoleColor.Magenta;
     Console.WriteLine("\n🔧 SELECCIÓN DE PROVEEDOR DE IA");
     Console.WriteLine("=" + new string('=', 40));
     Console.ResetColor();
     
-    Console.WriteLine("1. 🦙 Ollama (Modelos locales)");
-    Console.WriteLine("2. ☁️  Azure AI (Modelos en la nube)");
+    if (!availableProviders.Any())
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("❌ No hay proveedores de IA disponibles.");
+        Console.WriteLine("   Verifica la configuración de Ollama y Azure AI.");
+        Console.ResetColor();
+        return 0;
+    }
+    
+    foreach (var provider in availableProviders)
+    {
+        Console.WriteLine($"{provider.Key}. {provider.Value.Name}");
+    }
+    
     Console.WriteLine("0. 🚪 Salir");
     
     Console.ForegroundColor = ConsoleColor.Yellow;
@@ -61,10 +122,13 @@ static int DisplayProviderMenu()
 /// <summary>
 /// Gets available Ollama models from the local installation.
 /// </summary>
-static async Task<List<string>> GetAvailableOllamaModelsAsync(string endpoint)
+static async Task<List<string>> GetAvailableOllamaModelsAsync(string? endpoint)
 {
     try
     {
+        if (string.IsNullOrEmpty(endpoint))
+            return new List<string>();
+            
         var ollamaClient = new OllamaApiClient(new Uri(endpoint));
         var models = await ollamaClient.ListLocalModelsAsync();
         return models.Select(m => m.Name).ToList();
@@ -134,9 +198,12 @@ static IChatClient CreateChatClient(bool useAzureAI, string modelName, AppConfig
         
         try
         {
+            var baseUrl = config.ClientConfiguration.AzureAI.BaseUrl ?? throw new InvalidOperationException("Azure AI BaseUrl no configurada");
+            var apiKey = config.ClientConfiguration.AzureAI.ApiKey ?? throw new InvalidOperationException("Azure AI ApiKey no configurada");
+            
             var azureClient = new ChatCompletionsClient(
-                new Uri(config.ClientConfiguration.AzureAI.BaseUrl), 
-                new AzureKeyCredential(config.ClientConfiguration.AzureAI.ApiKey));
+                new Uri(baseUrl), 
+                new AzureKeyCredential(apiKey));
             
             return azureClient.AsIChatClient(modelName);
         }
@@ -151,8 +218,10 @@ static IChatClient CreateChatClient(bool useAzureAI, string modelName, AppConfig
         Console.WriteLine($"🟢 Inicializando cliente Ollama con modelo: {modelName}");
         Console.ResetColor();
         
+        var endpoint = config.ClientConfiguration.Ollama.Endpoint ?? throw new InvalidOperationException("Ollama Endpoint no configurado");
+        
         return new OllamaApiClient(
-            new Uri(config.ClientConfiguration.Ollama.Endpoint), 
+            new Uri(endpoint), 
             modelName);
     }
 }
@@ -293,8 +362,26 @@ try
 {
     while (true)
     {
-        // Step 1: Provider Selection
-        int providerChoice = DisplayProviderMenu();
+        // Step 1: Get Available Providers
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("� Verificando proveedores disponibles...");
+        Console.ResetColor();
+        
+        var availableProviders = await GetAvailableProvidersAsync(appConfig);
+        
+        if (!availableProviders.Any())
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("❌ No se encontraron proveedores de IA disponibles.");
+            Console.WriteLine("\n📋 Verifica la configuración:");
+            Console.WriteLine("   • Para Ollama: Asegúrate de que esté ejecutándose y tenga modelos instalados");
+            Console.WriteLine("   • Para Azure AI: Verifica la API key y modelos disponibles en appsettings.json");
+            Console.ResetColor();
+            break;
+        }
+        
+        // Step 2: Provider Selection
+        int providerChoice = DisplayProviderMenu(availableProviders);
         
         if (providerChoice == 0)
         {
@@ -304,27 +391,18 @@ try
             break;
         }
         
-        if (providerChoice != 1 && providerChoice != 2)
+        if (!availableProviders.ContainsKey(providerChoice))
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("❌ Selección inválida. Por favor, elige 1 (Ollama) o 2 (Azure AI).");
+            Console.WriteLine("❌ Selección inválida. Por favor, elige una opción válida.");
             Console.ResetColor();
             continue;
         }
         
-        bool useAzureAI = providerChoice == 2;
+        var selectedProvider = availableProviders[providerChoice];
+        bool useAzureAI = selectedProvider.IsAzure;
         
-        // Validate Azure AI availability
-        if (useAzureAI && (string.IsNullOrEmpty(appConfig.ClientConfiguration.AzureAI.ApiKey) || 
-                          appConfig.ClientConfiguration.AzureAI.ApiKey == "YOUR_AZURE_AI_KEY_HERE"))
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("❌ Azure AI no está configurado correctamente. Por favor, configura la API key en appsettings.json");
-            Console.ResetColor();
-            continue;
-        }
-        
-        // Step 2: Model Selection
+        // Step 3: Model Selection
         List<string> availableModels;
         string providerName;
         
@@ -350,7 +428,7 @@ try
             continue; // Go back to provider selection
         }
         
-        // Step 3: Create Chat Client
+        // Step 4: Create Chat Client
         IChatClient chatClient;
         try
         {
@@ -364,7 +442,7 @@ try
             continue;
         }
         
-        // Step 4: Agent Selection and Interaction
+        // Step 5: Agent Selection and Interaction
         await RunAgentInteractionLoop(chatClient, DisplayStreamingResponse);
     }
 }
