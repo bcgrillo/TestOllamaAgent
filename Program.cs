@@ -1,11 +1,11 @@
-﻿using System.ComponentModel;
-using Microsoft.Agents.AI;
+﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using OllamaSharp;
 using Azure.AI.Inference;
 using Azure;
 using TestOllamaAgent.Configuration;
+using TestOllamaAgent.Agents;
 
 // ============================================================================
 // CONFIGURATION LOADING - Load settings from appsettings.json
@@ -18,113 +18,152 @@ var configuration = new ConfigurationBuilder()
 var appConfig = new AppConfiguration();
 configuration.Bind(appConfig);
 
-// Validate configuration
-if (appConfig.ClientConfiguration.UseAzureAI)
+// Validate Azure AI configuration if available
+if (!string.IsNullOrEmpty(appConfig.ClientConfiguration.AzureAI.ApiKey) && 
+    appConfig.ClientConfiguration.AzureAI.ApiKey == "YOUR_AZURE_AI_KEY_HERE")
 {
-    if (string.IsNullOrEmpty(appConfig.ClientConfiguration.AzureAI.ApiKey) || 
-        appConfig.ClientConfiguration.AzureAI.ApiKey == "YOUR_AZURE_AI_KEY_HERE")
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("⚠️  ADVERTENCIA: Azure AI API key no está configurada correctamente.");
+    Console.WriteLine("Azure AI no estará disponible hasta que configures la clave en appsettings.json");
+    Console.ResetColor();
+}
+
+// ============================================================================
+// Helper Methods for Provider and Model Selection
+// ============================================================================
+
+/// <summary>
+/// Displays the provider selection menu and returns the user's choice.
+/// </summary>
+static int DisplayProviderMenu()
+{
+    Console.ForegroundColor = ConsoleColor.Magenta;
+    Console.WriteLine("\n🔧 SELECCIÓN DE PROVEEDOR DE IA");
+    Console.WriteLine("=" + new string('=', 40));
+    Console.ResetColor();
+    
+    Console.WriteLine("1. 🦙 Ollama (Modelos locales)");
+    Console.WriteLine("2. ☁️  Azure AI (Modelos en la nube)");
+    Console.WriteLine("0. 🚪 Salir");
+    
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.Write("\n👉 Selecciona una opción: ");
+    Console.ResetColor();
+    
+    if (int.TryParse(Console.ReadLine(), out int choice))
     {
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine("❌ ERROR: Azure AI API key is not configured properly.");
-        Console.WriteLine("Please update the 'AzureAI.ApiKey' value in appsettings.json");
-        Console.ResetColor();
-        Environment.Exit(1);
+        return choice;
     }
+    
+    return -1;
 }
 
 /// <summary>
-/// Example function tool that the agent can call to get weather information.
-/// The Description attributes provide metadata for the AI to understand when and how to use this function.
+/// Gets available Ollama models from the local installation.
 /// </summary>
-[Description("Get the weather for a given location.")]
-static string GetWeather([Description("The location to get the weather for.")] string location)
-    => location == "Donosti" || location == "San Sebastián"
-    ? $"Rainy with a high of 10°C."
-    : $"Sunny with a high of 25°C.";
-
-// ============================================================================
-// Initialize the selected chat client based on configuration
-// ============================================================================
-IChatClient chatClient;
-
-if (appConfig.ClientConfiguration.UseAzureAI)
+static async Task<List<string>> GetAvailableOllamaModelsAsync(string endpoint)
 {
-    Console.ForegroundColor = ConsoleColor.Blue;
-    Console.WriteLine("🔵 Initializing Azure AI client...");
-    Console.ResetColor();
-    
     try
     {
-        var azureClient = new ChatCompletionsClient(
-            new Uri(appConfig.ClientConfiguration.AzureAI.BaseUrl), 
-            new AzureKeyCredential(appConfig.ClientConfiguration.AzureAI.ApiKey));
-        chatClient = azureClient.AsIChatClient(appConfig.ClientConfiguration.AzureAI.ModelName);
+        var ollamaClient = new OllamaApiClient(new Uri(endpoint));
+        var models = await ollamaClient.ListLocalModelsAsync();
+        return models.Select(m => m.Name).ToList();
     }
     catch (Exception ex)
     {
-        throw new InvalidOperationException("Failed to initialize Azure AI service.", ex);
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"❌ Error al obtener modelos de Ollama: {ex.Message}");
+        Console.ResetColor();
+        return new List<string>();
     }
 }
-else
-{
-    Console.ForegroundColor = ConsoleColor.Green;
-    Console.WriteLine("🟢 Initializing Ollama client...");
-    Console.ResetColor();
-    
-    chatClient = new OllamaApiClient(
-        new Uri(appConfig.ClientConfiguration.Ollama.Endpoint), 
-        appConfig.ClientConfiguration.Ollama.ModelName);
-}
-
-// Create the AI agent with the selected client
-AIAgent agent = new ChatClientAgent(
-    chatClient,
-    appConfig.Agent.Instructions,
-    appConfig.Agent.Name,
-    tools: [AIFunctionFactory.Create(GetWeather)]  // Register our weather function
-);
 
 /// <summary>
-/// Custom middleware for intercepting and logging function calls.
-/// This demonstrates how to add cross-cutting concerns like logging, monitoring, or validation.
+/// Displays model selection menu and returns the selected model.
 /// </summary>
-async ValueTask<object?> FunctionCallMiddleware(
-    AIAgent agent,
-    FunctionInvocationContext context,
-    Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
-    CancellationToken cancellationToken)
+static string? DisplayModelSelection(List<string> models, string providerName)
 {
-    // Pre-invocation logging
-    Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.Write($"\n\n🔧 Function Name: {context!.Function.Name} - ");
-    Console.WriteLine($"Parameters: {string.Join(", ", context.Arguments.Select(kv => $"{kv.Key} -> {kv.Value}"))}");
+    if (!models.Any())
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"❌ No hay modelos disponibles para {providerName}.");
+        Console.ResetColor();
+        return null;
+    }
+    
+    Console.ForegroundColor = ConsoleColor.Cyan;
+    Console.WriteLine($"\n🎯 MODELOS DISPONIBLES - {providerName.ToUpper()}");
+    Console.WriteLine("=" + new string('=', 50));
     Console.ResetColor();
-
-    // Execute the function and capture timing
-    var startTime = DateTime.UtcNow;
-    var result = await next(context, cancellationToken);
-    var duration = DateTime.UtcNow - startTime;
-
-    // Post-invocation logging with timing information
+    
+    for (int i = 0; i < models.Count; i++)
+    {
+        Console.WriteLine($"{i + 1}. {models[i]}");
+    }
+    Console.WriteLine("0. 🔙 Volver atrás");
+    
     Console.ForegroundColor = ConsoleColor.Yellow;
-    Console.WriteLine($"Response from function: {result} (Duration: {duration.TotalMilliseconds}ms)\n");
+    Console.Write("\n👉 Selecciona un modelo: ");
     Console.ResetColor();
-
-    return result;
+    
+    if (int.TryParse(Console.ReadLine(), out int choice))
+    {
+        if (choice == 0) return null;
+        if (choice > 0 && choice <= models.Count)
+        {
+            return models[choice - 1];
+        }
+    }
+    
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine("❌ Selección inválida.");
+    Console.ResetColor();
+    return null;
 }
 
-// Create an agent with middleware pipeline
-var agentWithMiddleware = agent.AsBuilder()
-    .Use(FunctionCallMiddleware)  // Add our custom middleware
-    .Build();
+/// <summary>
+/// Creates the appropriate chat client based on provider and model selection.
+/// </summary>
+static IChatClient CreateChatClient(bool useAzureAI, string modelName, AppConfiguration config)
+{
+    if (useAzureAI)
+    {
+        Console.ForegroundColor = ConsoleColor.Blue;
+        Console.WriteLine($"🔵 Inicializando cliente Azure AI con modelo: {modelName}");
+        Console.ResetColor();
+        
+        try
+        {
+            var azureClient = new ChatCompletionsClient(
+                new Uri(config.ClientConfiguration.AzureAI.BaseUrl), 
+                new AzureKeyCredential(config.ClientConfiguration.AzureAI.ApiKey));
+            
+            return azureClient.AsIChatClient(modelName);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Failed to initialize Azure AI service.", ex);
+        }
+    }
+    else
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"🟢 Inicializando cliente Ollama con modelo: {modelName}");
+        Console.ResetColor();
+        
+        return new OllamaApiClient(
+            new Uri(config.ClientConfiguration.Ollama.Endpoint), 
+            modelName);
+    }
+}
 
 /// <summary>
 /// Helper method for displaying streaming responses with visual formatting.
 /// </summary>
-async Task DisplayStreamingResponse(string prompt, AIAgent agentToUse)
+async Task DisplayStreamingResponse(string prompt, AIAgent agentToUse, string agentName)
 {
     Console.ForegroundColor = ConsoleColor.Cyan;
-    Console.WriteLine($"\n🧠 {appConfig.Agent.Name} is thinking...");
+    Console.WriteLine($"\n🧠 {agentName} está pensando...");
     Console.ResetColor();
 
     var isFirstUpdate = true;
@@ -135,7 +174,7 @@ async Task DisplayStreamingResponse(string prompt, AIAgent agentToUse)
         if (isFirstUpdate)
         {
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write($"\n🌤️  {appConfig.Agent.Name}: ");
+            Console.Write($"\n🤖 {agentName}: ");
             Console.ResetColor();
             isFirstUpdate = false;
         }
@@ -146,19 +185,107 @@ async Task DisplayStreamingResponse(string prompt, AIAgent agentToUse)
 
     Console.WriteLine();
     Console.ForegroundColor = ConsoleColor.DarkGray;
-    Console.WriteLine("\n✨ Response complete!");
+    Console.WriteLine("\n✨ Respuesta completada!");
     Console.ResetColor();
 }
 
+/// <summary>
+/// Runs the agent selection and interaction loop.
+/// </summary>
+static async Task RunAgentInteractionLoop(IChatClient chatClient, Func<string, AIAgent, string, Task> displayStreamingResponse)
+{
+    while (true)
+    {
+        AgentManager.DisplayAgentMenu();
+        int selection = AgentManager.GetUserSelection();
+        
+        if (selection == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("🔄 Volviendo al menú de proveedores...\n");
+            Console.ResetColor();
+            break;
+        }
+
+        var availableAgents = AgentManager.GetAvailableAgents();
+        
+        if (!availableAgents.ContainsKey(selection))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("❌ Selección inválida. Por favor, elige una opción válida.");
+            Console.ResetColor();
+            continue;
+        }
+
+        var selectedAgent = availableAgents[selection];
+        
+        // Create the selected agent
+        var agent = selectedAgent.CreateAgent(chatClient);
+        
+        // Apply middleware if available
+        var agentToUse = agent;
+        var middleware = selectedAgent.GetMiddleware();
+        if (middleware != null)
+        {
+            agentToUse = agent.AsBuilder()
+                .Use(middleware)
+                .Build();
+        }
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"\n✅ Agente '{selectedAgent.Name}' activado!");
+        Console.WriteLine("💬 Escribe tus mensajes y presiona Enter");
+        Console.WriteLine("🔙 Escribe 'menu' para volver al menú de agentes");
+        Console.WriteLine("🔧 Escribe 'provider' para cambiar de proveedor");
+        Console.WriteLine("🛑 Presiona Ctrl+C para salir");
+        Console.WriteLine("=" + new string('=', 60));
+        Console.ResetColor();
+
+        // Chat loop for the selected agent
+        while (true)
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write("\n👤 Tú: ");
+            Console.ResetColor();
+            
+            string? userInput = Console.ReadLine();
+            
+            if (string.IsNullOrWhiteSpace(userInput))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("⚠️  Por favor, introduce un mensaje.");
+                Console.ResetColor();
+                continue;
+            }
+            
+            string inputLower = userInput.Trim().ToLower();
+            
+            if (inputLower == "menu")
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("🔄 Volviendo al menú de agentes...\n");
+                Console.ResetColor();
+                break;
+            }
+            
+            if (inputLower == "provider")
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("🔄 Volviendo al menú de proveedores...\n");
+                Console.ResetColor();
+                return; // Exit the agent loop and go back to provider selection
+            }
+            
+            await displayStreamingResponse(userInput, agentToUse, selectedAgent.Name);
+        }
+    }
+}
+
 // ============================================================================
-// Interactive Weather Chat Agent
-// Chat with the weather agent using custom messages until Ctrl+C
+// Main Application Flow
 // ============================================================================
 Console.ForegroundColor = ConsoleColor.Magenta;
-Console.WriteLine("🌤️  INTERACTIVE WEATHER AGENT CHAT");
-Console.WriteLine("=" + new string('=', 60));
-Console.WriteLine("💬 Type your weather questions and press Enter");
-Console.WriteLine("🛑 Press Ctrl+C to exit");
+Console.WriteLine("🤖 SISTEMA DE AGENTES DE PRUEBA");
 Console.WriteLine("=" + new string('=', 60));
 Console.ResetColor();
 
@@ -166,31 +293,85 @@ try
 {
     while (true)
     {
-        // Prompt for user input
-        Console.ForegroundColor = ConsoleColor.White;
-        Console.Write("\n👤 You: ");
-        Console.ResetColor();
+        // Step 1: Provider Selection
+        int providerChoice = DisplayProviderMenu();
         
-        string? userInput = Console.ReadLine();
-        
-        // Check if user wants to exit or if input is empty
-        if (string.IsNullOrWhiteSpace(userInput))
+        if (providerChoice == 0)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("⚠️  Please enter a message or press Ctrl+C to exit.");
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("👋 ¡Hasta luego!");
+            Console.ResetColor();
+            break;
+        }
+        
+        if (providerChoice != 1 && providerChoice != 2)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("❌ Selección inválida. Por favor, elige 1 (Ollama) o 2 (Azure AI).");
             Console.ResetColor();
             continue;
         }
         
-        // Process the user's message with the weather agent
-        await DisplayStreamingResponse(userInput, agentWithMiddleware);
+        bool useAzureAI = providerChoice == 2;
+        
+        // Validate Azure AI availability
+        if (useAzureAI && (string.IsNullOrEmpty(appConfig.ClientConfiguration.AzureAI.ApiKey) || 
+                          appConfig.ClientConfiguration.AzureAI.ApiKey == "YOUR_AZURE_AI_KEY_HERE"))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("❌ Azure AI no está configurado correctamente. Por favor, configura la API key en appsettings.json");
+            Console.ResetColor();
+            continue;
+        }
+        
+        // Step 2: Model Selection
+        List<string> availableModels;
+        string providerName;
+        
+        if (useAzureAI)
+        {
+            availableModels = appConfig.ClientConfiguration.AzureAI.AvailableModels;
+            providerName = "Azure AI";
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("🔍 Obteniendo modelos disponibles de Ollama...");
+            Console.ResetColor();
+            
+            availableModels = await GetAvailableOllamaModelsAsync(appConfig.ClientConfiguration.Ollama.Endpoint);
+            providerName = "Ollama";
+        }
+        
+        string? selectedModel = DisplayModelSelection(availableModels, providerName);
+        
+        if (selectedModel == null)
+        {
+            continue; // Go back to provider selection
+        }
+        
+        // Step 3: Create Chat Client
+        IChatClient chatClient;
+        try
+        {
+            chatClient = CreateChatClient(useAzureAI, selectedModel, appConfig);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"❌ Error al inicializar el cliente: {ex.Message}");
+            Console.ResetColor();
+            continue;
+        }
+        
+        // Step 4: Agent Selection and Interaction
+        await RunAgentInteractionLoop(chatClient, DisplayStreamingResponse);
     }
 }
 catch (OperationCanceledException)
 {
-    // Handle Ctrl+C gracefully
     Console.ForegroundColor = ConsoleColor.DarkGray;
-    Console.WriteLine("\n\n👋 Thanks for chatting with the Weather Agent!");
-    Console.WriteLine("🎉 Chat session ended.");
+    Console.WriteLine("\n\n👋 ¡Gracias por probar el sistema de agentes!");
+    Console.WriteLine("🎉 Sesión finalizada.");
     Console.ResetColor();
 }

@@ -1,25 +1,53 @@
 # 🌤️ Test Ollama Agent
 
-A demonstration project showing how to create an intelligent AI agent that can use both **Ollama** (local) and **Azure AI** (cloud) to answer weather-related queries. This example showcases AI agents, custom middleware, and multi-provider AI integration.
+A demonstration project showing how to create an intelligent AI agent system that can use both **Ollama** (local) and **Azure AI** (cloud) services. This example showcases a modular AI agent architecture with clean separation of concerns.
 
 ## 🎯 What You'll Learn
 
-- **AI Agent Architecture**: Structure a conversational agent
+- **Modular AI Agent Architecture**: Structure agents with clean separation of concerns
 - **Provider Abstraction**: Use a common interface for multiple AI services
-- **Function Calling**: Implement tools the agent can use
+- **Function Calling**: Implement reusable tools that agents can use
 - **Middleware Pattern**: Add cross-cutting functionality like logging
 - **Flexible Configuration**: Manage settings for different environments
+- **Extensible Design**: Easy to add new agents, tools, and middleware
 
 ## 🏗️ Project Structure
 
 ```
 TestOllamaAgent/
-├── Configuration.cs          # Typed configuration classes
-├── Program.cs                # Main entry point and logic
-├── appsettings.example.json  # Configuration template
+├── agents/                     # Agent definitions
+│   ├── BaseAgent.cs           # Abstract base class for all agents
+│   ├── AgentManager.cs        # Agent registry and management
+│   ├── WeatherAgent.cs        # Weather-specific agent
+│   └── ChatAgent.cs           # General conversation agent
+├── tools/                      # Reusable function tools
+│   ├── WeatherTools.cs        # Weather-related functions
+│   └── TimeTools.cs           # Time-related functions
+├── middlewares/                # Cross-cutting concerns
+│   └── FunctionCallMiddleware.cs # Logging middleware
+├── Configuration.cs           # Typed configuration classes
+├── Program.cs                 # Main entry point and logic
+├── appsettings.example.json   # Configuration template
 ├── appsettings.json          # Current config (don't commit)
-└── TestOllamaAgent.csproj    # Project dependencies
+└── TestOllamaAgent.csproj     # Project dependencies
 ```
+
+## ✨ Key Features
+
+### 🤖 Modular Agent Design
+- **BaseAgent**: Abstract class that defines the common structure for all agents
+- **Self-contained Configuration**: Each agent defines its own prompt, tools, and behavior
+- **Easy Extension**: Add new agents by inheriting from `BaseAgent`
+
+### 🔧 Reusable Tools
+- **Organized by Function**: Tools are grouped in logical namespaces
+- **Discoverable**: AI automatically discovers and uses appropriate tools
+- **Testable**: Tools are isolated and easy to test independently
+
+### 🔄 Flexible Middleware
+- **Logging**: Track function calls and performance
+- **Extensible**: Easy to add new middleware for authentication, validation, etc.
+- **Composable**: Stack multiple middleware layers
 
 ## ⚙️ Setup
 
@@ -175,9 +203,111 @@ async ValueTask<object?> FunctionCallMiddleware(/* parameters */)
 }
 ```
 
-## 🛠️ Extending the Agent
+## 🛠️ Extending the System
 
-### Adding New Functions
+### Adding New Agents
+
+To create a new agent, follow these steps:
+
+1. **Create Tools** (if needed) in the `tools/` folder:
+```csharp
+// tools/MathTools.cs
+using System.ComponentModel;
+
+namespace TestOllamaAgent.Tools;
+
+public static class MathTools
+{
+    [Description("Calculate the sum of two numbers.")]
+    public static int Add([Description("First number")] int a, [Description("Second number")] int b)
+        => a + b;
+}
+```
+
+2. **Create the Agent** class in the `agents/` folder:
+```csharp
+// agents/MathAgent.cs
+using Microsoft.Extensions.AI;
+using TestOllamaAgent.Tools;
+
+namespace TestOllamaAgent.Agents;
+
+public class MathAgent : BaseAgent
+{
+    public override string Name => "MathBot";
+    
+    public override string Description => "🧮 Agente matemático - Resuelve operaciones matemáticas";
+    
+    public override string Instructions => "You are a mathematics expert. Help users with mathematical calculations and problems.";
+
+    protected override AIFunction[] GetTools()
+    {
+        return [AIFunctionFactory.Create(MathTools.Add)];
+    }
+}
+```
+
+3. **Register the Agent** in `AgentManager.cs`:
+```csharp
+public static Dictionary<int, BaseAgent> GetAvailableAgents()
+{
+    return new Dictionary<int, BaseAgent>
+    {
+        { 1, new WeatherAgent() },
+        { 2, new ChatAgent() },
+        { 3, new MathAgent() }  // Add your new agent
+    };
+}
+```
+
+### Adding New Tools
+
+Create tool classes in the `tools/` folder. Each tool should be a static method with proper descriptions:
+
+```csharp
+// tools/DatabaseTools.cs
+[Description("Search for user information in the database.")]
+public static string SearchUser([Description("The user ID to search for.")] string userId)
+{
+    // Your implementation here
+    return $"User {userId} found";
+}
+```
+
+### Adding New Middleware
+
+Create middleware in the `middlewares/` folder:
+
+```csharp
+// middlewares/AuthenticationMiddleware.cs
+public static class AuthenticationMiddleware
+{
+    public static async ValueTask<object?> ValidateUser(
+        AIAgent agent,
+        FunctionInvocationContext context,
+        Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>> next,
+        CancellationToken cancellationToken)
+    {
+        // Add authentication logic here
+        Console.WriteLine("🔐 Validating user permissions...");
+        
+        return await next(context, cancellationToken);
+    }
+}
+```
+
+Then override `GetMiddleware()` in your agent to use custom middleware:
+
+```csharp
+public override Func<AIAgent, FunctionInvocationContext, Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>>, CancellationToken, ValueTask<object?>>? GetMiddleware()
+{
+    return AuthenticationMiddleware.ValidateUser;
+}
+```
+
+## 🛠️ Legacy Extension Examples
+
+### Adding New Functions (Old Way)
 
 ```csharp
 [Description("Get the current time in a specific timezone.")]
