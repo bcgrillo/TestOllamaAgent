@@ -1,4 +1,4 @@
-# 🤖 Test Ollama Agent
+# 🤖 Microsoft Agent Framework Examples
 
 A comprehensive demonstration project showing how to create an intelligent multi-agent AI system that can use both **Ollama** (local) and **Azure AI** (cloud) services. This example showcases a modular AI agent architecture with specialized agents, interactive selection, and web search capabilities.
 
