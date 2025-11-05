@@ -459,6 +459,10 @@ For production, use environment variables or Azure Key Vault.
 - [Ollama Documentation](https://docs.ollama.com/)
 - [Azure AI Services](https://learn.microsoft.com/en-us/azure/ai-services/)
 
+## 🙏 Acknowledgments
+
+This project was inspired by Anto Subash's excellent article ["Building an Agent Framework with Ollama"](https://blog.antosubash.com/posts/agent-framework-ollama) and his [example repository](https://github.com/antosubash/agent-framework-ollama). The code has been enhanced with additional features and modifications to deepen the learning about Microsoft Agent Framework.
+
 ---
 
 *Questions or want to contribute? Open an issue or create a pull request!* 🚀
