@@ -288,18 +288,8 @@ static async Task RunAgentInteractionLoop(IChatClient chatClient, Func<string, A
 
         var selectedAgent = availableAgents[selection];
         
-        // Create the selected agent
-        var agent = selectedAgent.CreateAgent(chatClient);
-        
-        // Apply middleware if available
-        var agentToUse = agent;
-        var middleware = selectedAgent.GetMiddleware();
-        if (middleware != null)
-        {
-            agentToUse = agent.AsBuilder()
-                .Use(middleware)
-                .Build();
-        }
+        // Create the selected agent with middleware already applied
+        var agentToUse = selectedAgent.CreateAgent(chatClient);
 
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine($"\n✅ Agente '{selectedAgent.Name}' activado!");

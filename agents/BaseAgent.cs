@@ -19,11 +19,23 @@ public abstract class BaseAgent
     
     public AIAgent CreateAgent(IChatClient chatClient)
     {
-        return new ChatClientAgent(
+        // Create the base agent
+        var agent = new ChatClientAgent(
             chatClient,
             Instructions,
             Name,
             tools: GetTools()
         );
+
+        // Apply middleware if available
+        var middleware = GetMiddleware();
+        if (middleware != null)
+        {
+            return agent.AsBuilder()
+                .Use(middleware)
+                .Build();
+        }
+
+        return agent;
     }
 }

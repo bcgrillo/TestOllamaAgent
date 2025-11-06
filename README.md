@@ -97,8 +97,7 @@ Edit `appsettings.json` for your preferred AI provider:
 {
   "ClientConfiguration": {
     "Ollama": {
-      "Endpoint": "http://localhost:11434",
-      "ModelName": "llama3.2:3b"
+      "Endpoint": "http://localhost:11434"
     }
   }
 }
@@ -119,8 +118,8 @@ ollama pull llama3.2:3b
   "ClientConfiguration": {
     "AzureAI": {
       "BaseUrl": "https://models.github.ai/inference",
-      "ApiKey": "your-actual-api-key",
-      "ModelName": "mistral-small-2503"
+      "ApiKey": "YOUR_AZURE_AI_KEY_HERE",
+      "AvailableModels": ["mistral-small-2503"]
     }
   }
 }
@@ -197,14 +196,24 @@ The project uses typed configuration classes for type safety and IntelliSense su
 public class AppConfiguration
 {
     public ClientConfiguration ClientConfiguration { get; set; } = new();
-    public AgentConfiguration Agent { get; set; } = new();
 }
 
 public class ClientConfiguration
 {
-    public bool UseAzureAI { get; set; }
-    public OllamaConfiguration Ollama { get; set; } = new();
-    public AzureAIConfiguration AzureAI { get; set; } = new();
+    public OllamaConfiguration? Ollama { get; set; }
+    public AzureAIConfiguration? AzureAI { get; set; }
+}
+
+public class OllamaConfiguration
+{
+    public string Endpoint { get; set; }
+}
+
+public class AzureAIConfiguration
+{
+    public string BaseUrl { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+    public List<string> AvailableModels { get; set; } = new();
 }
 ```
 
@@ -255,6 +264,36 @@ else
     chatClient = new OllamaApiClient(/*...*/);
 }
 ```
+
+### Agent Creation and Middleware Integration
+
+The `BaseAgent` class handles both agent creation and middleware application in a single method:
+
+```csharp
+public AIAgent CreateAgent(IChatClient chatClient)
+{
+    // Create the base agent
+    var agent = new ChatClientAgent(
+        chatClient,
+        Instructions,
+        Name,
+        tools: GetTools()
+    );
+
+    // Apply middleware if available
+    var middleware = GetMiddleware();
+    if (middleware != null)
+    {
+        return agent.AsBuilder()
+            .Use(middleware)
+            .Build();
+    }
+
+    return agent;
+}
+```
+
+This encapsulated approach ensures consistent agent creation and middleware application across all agent types.
 
 ### Function Calling
 

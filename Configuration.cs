@@ -14,7 +14,6 @@ public class ClientConfiguration
 public class OllamaConfiguration
 {
     public string Endpoint { get; set; }
-    public string ModelName { get; set; }
 }
 
 public class AzureAIConfiguration
