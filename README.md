@@ -112,18 +112,21 @@ winget install --id=Ollama.Ollama -e
 ollama pull llama3.2:3b
 ```
 
-**Option B: Azure AI** ☁️
+
+**Option B: GitHub Models (Azure AI endpoint)** ☁️
 ```json
 {
-  "ClientConfiguration": {
-    "AzureAI": {
-      "BaseUrl": "https://models.github.ai/inference",
-      "ApiKey": "YOUR_AZURE_AI_KEY_HERE",
-      "AvailableModels": ["mistral-small-2503"]
+    "ClientConfiguration": {
+        "AzureAI": {
+            "BaseUrl": "https://models.github.ai/inference",
+            "ApiKey": "YOUR_GITHUB_PAT_HERE",
+            "AvailableModels": ["mistral-small-2503"]
+        }
     }
-  }
 }
 ```
+
+> **Note:** To use GitHub Models, you can use your GitHub Personal Access Token (PAT) for free with your GitHub account. For more information and how to generate a PAT, visit: [GitHub Models Quickstart – Step 2: Make an API Call](https://docs.github.com/en/github-models/quickstart#step-2-make-an-api-call)
 
 ## 🚀 Running the Application
 
